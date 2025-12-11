@@ -568,6 +568,8 @@
     "Custom ComfyUI": "Personalizza ComfyUI",
     "Not supported for edit models": "Non supportato per i modelli di modifica",
     "Document:": null,
-    "Jobs": "Lavoro"
+    "Jobs": "Lavoro",
+    "Lora Manager": null,
+    "Search LoRA": null
   }
 }

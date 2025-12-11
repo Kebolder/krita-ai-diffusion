@@ -85,12 +85,12 @@ def get_release_metadata(sync_code_version: bool = True):
             _update_file_version(
                 init_path,
                 r'(__version__\s*=\s*")[^"]*(")',
-                rf'\1{declared_version}\2',
+                rf"\1{declared_version}\2",
             )
             _update_file_version(
                 resources_path,
                 r'(version\s*=\s*")[^"]*(")',
-                rf'\1{declared_version}\2',
+                rf"\1{declared_version}\2",
             )
 
             # Keep the in-memory modules in sync as well.

@@ -568,6 +568,8 @@
     "Total:": null,
     "Not supported for edit models": null,
     "Document:": null,
-    "Jobs": null
+    "Jobs": null,
+    "Lora Manager": null,
+    "Search LoRA": null
   }
 }

@@ -725,6 +725,7 @@ class WorkspaceSelectWidget(QToolButton):
         Workspace.live: theme.icon("workspace-live"),
         Workspace.animation: theme.icon("workspace-animation"),
         Workspace.custom: theme.icon("workspace-custom"),
+        Workspace.lora_manager: theme.icon("file-kra"),
     }
 
     _value = Workspace.generation
@@ -738,6 +739,7 @@ class WorkspaceSelectWidget(QToolButton):
         menu.addAction(self._create_action(_("Live"), Workspace.live))
         menu.addAction(self._create_action(_("Animation"), Workspace.animation))
         menu.addAction(self._create_action(_("Graph"), Workspace.custom))
+        menu.addAction(self._create_action(_("Lora Manager"), Workspace.lora_manager))
 
         self.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonIconOnly)
         self.setMenu(menu)

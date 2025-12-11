@@ -140,7 +140,6 @@ class Model(QObject, ObservableProperties):
         self._doc = document
         self._connection = connection
         self._layer: Layer | None = None
-        self._preview_canvas_original_extent: Extent | None = None
         self.generate_seed()
         self.jobs = JobQueue()
         self.regions = RootRegion(self)
@@ -593,6 +592,8 @@ class Model(QObject, ObservableProperties):
         elif message.event is ClientEvent.output:
             if isinstance(message.result, ResizeCommand):
                 self._apply_resize_command(message.result, job)
+            elif isinstance(message.result, dict) and message.result.get("resize_canvas"):
+                job.params.resize_canvas = True
             else:
                 self.custom.show_output(message.result)
         elif message.event is ClientEvent.finished:
@@ -635,87 +636,16 @@ class Model(QObject, ObservableProperties):
             self.progress = 0
 
     def _apply_resize_command(self, cmd: ResizeCommand, job: Job):
-        """Record a requested canvas resize for this job.
+        """Legacy: record a requested canvas resize for this job.
 
-        The actual resize is applied when showing a preview or applying the result.
+        Newer workflows use a simple resize toggle in the UI output instead.
         """
         try:
             bounds = job.params.bounds
             job.params.bounds = Bounds(bounds.x, bounds.y, cmd.width, cmd.height)
-            job.params.metadata["resize_canvas"] = {"width": cmd.width, "height": cmd.height}
+            job.params.resize_canvas = True
         except Exception as e:
             log.warning(f"Failed to store resize command from custom workflow: {e}")
-
-    def _get_resize_for_params(self, params: JobParams) -> tuple[int, int] | None:
-        resize = params.metadata.get("resize_canvas")
-        if not isinstance(resize, dict):
-            return None
-
-        try:
-            width = int(resize.get("width", 0))
-            height = int(resize.get("height", 0))
-        except Exception:
-            return None
-
-        if width <= 0 or height <= 0:
-            return None
-
-        return width, height
-
-    def _preview_canvas_size(self, params: JobParams):
-        """Resize canvas for preview, remembering original size so it can be reverted.
-
-        This only affects temporary previews. The canvas is reverted when
-        there are no history selections (see hide_preview).
-        """
-        resize = self._get_resize_for_params(params)
-        if resize is None:
-            return
-
-        width, height = resize
-        extent = self.document.extent
-        if extent.width == width and extent.height == height:
-            return
-        if self._preview_canvas_original_extent is None:
-            self._preview_canvas_original_extent = extent
-
-        try:
-            self.document.resize_canvas(width, height)
-        except Exception as e:
-            log.warning(f"Failed to resize canvas for preview from custom workflow: {e}")
-
-    def _reset_preview_canvas_size(self):
-        """Revert canvas size after preview, if it was resized just for preview."""
-        if self._preview_canvas_original_extent is None:
-            return
-
-        original = self._preview_canvas_original_extent
-        self._preview_canvas_original_extent = None
-
-        try:
-            self.document.resize_canvas(original.width, original.height)
-        except Exception as e:
-            log.warning(f"Failed to revert canvas size after preview: {e}")
-
-    def _apply_canvas_resize_for_params(self, params: JobParams):
-        """Resize the canvas permanently if a resize was requested in metadata.
-
-        Once applied, the resize hint is cleared so future previews don't
-        treat it as a pending temporary resize.
-        """
-        resize = self._get_resize_for_params(params)
-        if resize is None:
-            return
-
-        width, height = resize
-
-        try:
-            extent = self.document.extent
-            if extent.width != width or extent.height != height:
-                self.document.resize_canvas(width, height)
-            params.metadata.pop("resize_canvas", None)
-        except Exception as e:
-            log.warning(f"Failed to resize canvas from custom workflow: {e}")
 
     def update_preview(self):
         if selection := self.jobs.selection:
@@ -728,8 +658,6 @@ class Model(QObject, ObservableProperties):
         assert job is not None, "Cannot show preview, invalid job id"
         if job.kind is JobKind.animation:
             return  # don't show animation preview on canvas (it's slow and clumsy)
-
-        self._preview_canvas_size(job.params)
 
         name = f"[{name_prefix}] {trim_text(job.params.name, 77)}"
         image = job.results[index]
@@ -753,7 +681,6 @@ class Model(QObject, ObservableProperties):
                 self._layer = None
             else:
                 self._layer.hide()
-        self._reset_preview_canvas_size()
 
     def apply_result(
         self,
@@ -763,8 +690,17 @@ class Model(QObject, ObservableProperties):
         region_behavior=ApplyRegionBehavior.layer_group,
         prefix="",
     ):
-        self._apply_canvas_resize_for_params(params)
-        self._preview_canvas_original_extent = None
+        if params.resize_canvas:
+            try:
+                extent = image.extent
+                target_width, target_height = extent.width, extent.height
+                current = self.document.extent
+                if current.width != target_width or current.height != target_height:
+                    self.document.resize_canvas(target_width, target_height)
+            except Exception as e:
+                log.warning(f"Failed to resize canvas from custom workflow: {e}")
+            finally:
+                params.resize_canvas = False
 
         bounds = Bounds(*params.bounds.offset, *image.extent)
         if len(params.regions) == 0 or region_behavior is ApplyRegionBehavior.none:

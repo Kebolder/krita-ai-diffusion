@@ -1,6 +1,4 @@
-import os
 import shutil
-import hashlib
 
 from enum import Enum
 from pathlib import Path
@@ -30,11 +28,12 @@ class UpdateState(Enum):
 class UpdatePackage(NamedTuple):
     version: str
     url: str
-    sha256: str
 
 
 class AutoUpdate(QObject, ObservableProperties):
-    default_api_url = os.getenv("INTERSTICE_URL", "https://api.interstice.cloud")
+    # This fork checks for updates only from the GitHub
+    # releases of this repository.
+    github_repo = "Kebolder/krita-ai-diffusion"
 
     state = Property(UpdateState.unknown)
     latest_version = Property("")
@@ -48,12 +47,11 @@ class AutoUpdate(QObject, ObservableProperties):
         self,
         plugin_dir: Path | None = None,
         current_version: str | None = None,
-        api_url: str | None = None,
+        api_url: str | None = None,  # kept for backwards-compatible signature, ignored
     ):
         super().__init__()
         self.plugin_dir = plugin_dir or Path(__file__).parent.parent
         self.current_version = current_version or __version__
-        self.api_url = api_url or self.default_api_url
         self._package: UpdatePackage | None = None
         self._temp_dir: TemporaryDirectory | None = None
         self._request_manager: RequestManager | None = None
@@ -70,30 +68,47 @@ class AutoUpdate(QObject, ObservableProperties):
             return
 
         self.state = UpdateState.checking
-        log.info(f"Checking for latest plugin version at {self.api_url}")
-        result = await self._net.get(
-            f"{self.api_url}/plugin/latest?version={self.current_version}", timeout=10
-        )
-        self.latest_version = result.get("version")
-        if not self.latest_version:
-            log.error(f"Invalid plugin update information: {result}")
+        await self._check_github()
+
+    async def _check_github(self):
+        # Default and only update path: latest GitHub Release of this fork.
+        api_url = f"https://api.github.com/repos/{self.github_repo}/releases/latest"
+        log.info(f"Checking for latest plugin version on GitHub: {api_url}")
+        result = await self._net.get(api_url, timeout=10)
+
+        tag = result.get("tag_name") or result.get("name")
+        if not tag:
+            log.error(f"Invalid GitHub release information: {result}")
             self.state = UpdateState.failed_check
-            self.error = "Failed to retrieve plugin update information"
-        elif self.latest_version == self.current_version:
-            log.info("Plugin is up to date!")
+            self.error = "Failed to retrieve plugin update information from GitHub"
+            return
+
+        latest = str(tag).lstrip("v")
+        self.latest_version = latest
+
+        if latest == self.current_version:
+            log.info("Plugin is up to date (GitHub)!")
             self.state = UpdateState.latest
-        elif "url" not in result or "sha256" not in result:
-            log.error(f"Invalid plugin update information: {result}")
+            return
+
+        assets = result.get("assets") or []
+        zip_asset = next((a for a in assets if str(a.get("name", "")).endswith(".zip")), None)
+        if not zip_asset:
+            log.error(f"No ZIP asset found in latest GitHub release: {result}")
             self.state = UpdateState.failed_check
-            self.error = "Plugin update package is incomplete"
-        else:
-            log.info(f"New plugin version available: {self.latest_version}")
-            self._package = UpdatePackage(
-                version=self.latest_version,
-                url=result["url"],
-                sha256=result["sha256"],
-            )
-            self.state = UpdateState.available
+            self.error = "Latest GitHub release does not contain a ZIP package"
+            return
+
+        url = zip_asset.get("browser_download_url")
+        if not url:
+            log.error(f"Invalid ZIP asset in latest GitHub release: {zip_asset}")
+            self.state = UpdateState.failed_check
+            self.error = "GitHub release ZIP asset is missing download URL"
+            return
+
+        log.info(f"New plugin version available on GitHub: {latest} ({url})")
+        self._package = UpdatePackage(version=latest, url=url)
+        self.state = UpdateState.available
 
     def run(self):
         return eventloop.run(
@@ -108,11 +123,6 @@ class AutoUpdate(QObject, ObservableProperties):
         log.info(f"Downloading plugin update {self._package.url}")
         self.state = UpdateState.downloading
         archive_data = await self._net.download(self._package.url)
-
-        sha256 = hashlib.sha256(archive_data).hexdigest()
-        if sha256 != self._package.sha256:
-            log.error(f"Update package hash mismatch: {sha256} != {self._package.sha256}")
-            raise RuntimeError("Downloaded plugin package is corrupted or incomplete")
 
         archive_path.write_bytes(archive_data)
         source_dir = Path(self._temp_dir.name) / f"krita_ai_diffusion-{self.latest_version}"

@@ -2,6 +2,8 @@
 
 This version of the Krita AI Diffusion plugin is a personal merge of all my branches, experiments, and updates. It may change frequently, and parts of it will probably be opened as pull requests to the original plugin over time.
 ### Make sure you disable "Check for updates on startup"
+<img width="339" height="125" alt="image" src="https://github.com/user-attachments/assets/e91c4d67-8737-4f83-b949-9f1fb9f56acf" />
+
 ### For original version and info goto https://github.com/Acly/krita-ai-diffusion
 
 ### New stuff

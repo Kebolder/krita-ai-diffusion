@@ -89,24 +89,108 @@ def build_package():
 
 
 async def publish_package(package_path: Path, target: str):
-    dotenv.load_dotenv(root / "service" / "web" / ".env.local")
-    service_url = os.environ["TEST_SERVICE_URL"]
-    if target == "production":
-        service_url = "https://api.interstice.cloud"
-    service_token = os.environ["INTERSTICE_INFRA_TOKEN"]
-    headers = {"Authorization": f"Bearer {service_token}"}
+    # Load environment from .env, then optionally override with .env.local
+    dotenv.load_dotenv(root / ".env")
+    dotenv.load_dotenv(root / ".env.local", override=True)
+    repo = os.environ.get("PLUGIN_REPO")
+    token = os.environ.get("GITHUB_TOKEN")
 
-    archive_data = package_path.read_bytes()
-    async with aiohttp.ClientSession(service_url, headers=headers) as session:
-        print("Uploading package to", service_url)
-        async with session.put(f"/plugin/upload/{version}", data=archive_data) as response:
-            if response.status != 200:
+    if not repo or not token:
+        raise RuntimeError(
+            "PLUGIN_REPO and GITHUB_TOKEN must be set in .env.local to publish the package."
+        )
+
+    owner, name = repo.split("/", 1)
+    tag_name = f"v{version}"
+
+    # Read release title/version/body from release_notes.md if present
+    release_notes_file = root / "release_notes.md"
+    release_name = f"krita_ai_diffusion {version}"
+    release_body = f"Version {version}"
+
+    if release_notes_file.exists():
+        text = release_notes_file.read_text(encoding="utf-8")
+        lines = [line.rstrip() for line in text.splitlines()]
+
+        title = None
+        declared_version = None
+        body_lines: list[str] = []
+
+        for line in lines:
+            stripped = line.strip()
+            lower = stripped.lower()
+            if lower.startswith("title:"):
+                title = stripped.split(":", 1)[1].strip() or None
+                continue
+            if lower.startswith("version:"):
+                declared_version = stripped.split(":", 1)[1].strip() or None
+                continue
+            body_lines.append(line)
+
+        if declared_version and declared_version != version:
+            raise RuntimeError(
+                f"Version mismatch: ai_diffusion.__version__ is {version} "
+                f"but release_notes.md declares {declared_version}"
+            )
+
+        if title:
+            release_name = f"{title} ({version})"
+
+        body_text = "\n".join(body_lines).strip()
+        if body_text:
+            release_body = body_text
+
+    headers = {
+        "Authorization": f"Bearer {token}",
+        "Accept": "application/vnd.github+json",
+    }
+
+    async with aiohttp.ClientSession(headers=headers) as session:
+        release_url = f"https://api.github.com/repos/{owner}/{name}/releases"
+        release_payload = {
+            "tag_name": tag_name,
+            "name": release_name,
+            "body": release_body,
+            "draft": False,
+            "prerelease": False,
+        }
+
+        async with session.post(release_url, json=release_payload) as response:
+            if response.status == 201:
+                release = await response.json()
+            elif response.status == 422:
+                # Release likely already exists, fetch it by tag
+                async with session.get(f"{release_url}/tags/{tag_name}") as get_response:
+                    if get_response.status != 200:
+                        raise RuntimeError(
+                            f"Failed to fetch existing release: {get_response.status}",
+                            await get_response.text(),
+                        )
+                    release = await get_response.json()
+            else:
                 raise RuntimeError(
-                    f"Failed to upload package: {response.status}", await response.text()
+                    f"Failed to create release: {response.status}", await response.text()
                 )
-            uploaded = await response.json()
-            for key, value in uploaded.items():
-                print(f"{key}: {value}")
+
+        upload_url = release["upload_url"].split("{", 1)[0]
+        archive_data = package_path.read_bytes()
+        upload_headers = {
+            "Authorization": f"Bearer {token}",
+            "Content-Type": "application/zip",
+            "Accept": "application/vnd.github+json",
+        }
+
+        async with aiohttp.ClientSession(headers=upload_headers) as upload_session:
+            async with upload_session.post(
+                upload_url, params={"name": package_path.name}, data=archive_data
+            ) as upload_response:
+                if upload_response.status not in (200, 201):
+                    raise RuntimeError(
+                        f"Failed to upload asset: {upload_response.status}",
+                        await upload_response.text(),
+                    )
+                asset = await upload_response.json()
+                print("Uploaded asset:", asset.get("browser_download_url"))
 
 
 if __name__ == "__main__":
@@ -117,10 +201,9 @@ if __name__ == "__main__":
         build_package()
 
     elif cmd == "publish":
-        target = sys.argv[2] if len(sys.argv) > 2 else "production"
         package = root / f"{package_name}.zip"
         print("Publishing package", str(package))
-        asyncio.run(publish_package(package, target))
+        asyncio.run(publish_package(package, "github"))
 
     elif cmd == "check":
         print("Performing precheck without building")

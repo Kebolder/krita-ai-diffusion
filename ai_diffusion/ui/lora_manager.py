@@ -191,9 +191,10 @@ class LoraManagerWidget(QWidget):
         # Clear existing widgets and spacers from the list layout
         while self._list_layout.count():
             item = self._list_layout.takeAt(0)
-            widget = item.widget()
-            if widget is not None:
-                widget.deleteLater()
+            if item is not None:
+                widget = item.widget()
+                if widget is not None:
+                    widget.deleteLater()
 
         self._items.clear()
         self._groups.clear()

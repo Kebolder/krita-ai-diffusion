@@ -31,7 +31,7 @@ stringzilla
 
 # comfyui_controlnet_aux
 importlib_metadata
-huggingface_hub
+huggingface_hub<1.0
 scipy
 # Version pinned because later versions require numpy>2 which conflicts with mediapipe
 opencv-python==4.11.0.86
@@ -67,6 +67,6 @@ sentencepiece==0.2.0
 # Nunchaku
 diffusers>=0.34
 accelerate
-huggingface_hub
+huggingface_hub<1.0
 tomli
 peft>=0.15

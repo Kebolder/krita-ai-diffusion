@@ -570,6 +570,8 @@
     "Document:": null,
     "Jobs": null,
     "Lora Manager": null,
-    "Search LoRA": null
+    "Search LoRA": null,
+    "A workflow named '{name}' already exists. Do you want to overwrite it?": null,
+    "Overwrite Workflow": null
   }
 }

@@ -1,7 +1,7 @@
 ## Krita AI Diffusion – Personal Merge Build
 
 This version of the Krita AI Diffusion plugin is a personal merge of all my branches, experiments, and updates. It may change frequently, and parts of it will probably be opened as pull requests to the original plugin over time.
-
+### Make sure you disable "Check for updates on startup"
 ### For original version and info goto https://github.com/Acly/krita-ai-diffusion
 
 ### New stuff

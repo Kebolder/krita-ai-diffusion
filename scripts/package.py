@@ -3,6 +3,7 @@ import aiohttp
 import sys
 import dotenv
 import os
+import re
 import subprocess
 from markdown import markdown
 from shutil import rmtree, copy, copytree, ignore_patterns, make_archive
@@ -17,8 +18,6 @@ import translation
 
 root = Path(__file__).parent.parent
 package_dir = root / "scripts" / ".package"
-version = ai_diffusion.__version__
-package_name = f"krita_ai_diffusion-{version}"
 
 
 def convert_markdown_to_html(markdown_file: Path, html_file: Path):
@@ -27,6 +26,92 @@ def convert_markdown_to_html(markdown_file: Path, html_file: Path):
     html = markdown(text, extensions=["fenced_code", "codehilite"])
     with open(html_file, "w", encoding="utf-8") as f:
         f.write(html)
+
+
+def _read_release_notes():
+    """Return (title, version, body_text) from release_notes.md, or (None, None, None)."""
+    release_notes_file = root / "release_notes.md"
+    if not release_notes_file.exists():
+        return None, None, None
+
+    text = release_notes_file.read_text(encoding="utf-8")
+    lines = [line.rstrip() for line in text.splitlines()]
+
+    title = None
+    declared_version = None
+    body_lines: list[str] = []
+
+    for line in lines:
+        stripped = line.strip()
+        lower = stripped.lower()
+        if lower.startswith("title:"):
+            title = stripped.split(":", 1)[1].strip() or None
+            continue
+        if lower.startswith("version:"):
+            declared_version = stripped.split(":", 1)[1].strip() or None
+            continue
+        body_lines.append(line)
+
+    body_text = "\n".join(body_lines).strip() or None
+    return title, declared_version, body_text
+
+
+def _update_file_version(path: Path, pattern: str, replacement: str):
+    text = path.read_text(encoding="utf-8")
+    new_text, count = re.subn(pattern, replacement, text, count=1)
+    if count == 0:
+        raise RuntimeError(f"Failed to update version in {path}")
+    path.write_text(new_text, encoding="utf-8")
+
+
+def get_release_metadata(sync_code_version: bool = True):
+    """Return (version, release_name, release_body) and optionally sync code version.
+
+    - Version is primarily taken from release_notes.md's ``Version:`` line.
+    - If missing, falls back to ai_diffusion.__version__.
+    - When sync_code_version is True and a Version is declared, update
+      ai_diffusion/__init__.py and ai_diffusion/resources.py to that value.
+    """
+    title, declared_version, body_text = _read_release_notes()
+
+    version = ai_diffusion.__version__
+
+    if declared_version:
+        if sync_code_version and declared_version != version:
+            init_path = root / "ai_diffusion" / "__init__.py"
+            resources_path = root / "ai_diffusion" / "resources.py"
+
+            print(f"Updating plugin version from {version} to {declared_version}")
+            _update_file_version(
+                init_path,
+                r'(__version__\s*=\s*")[^"]*(")',
+                rf'\1{declared_version}\2',
+            )
+            _update_file_version(
+                resources_path,
+                r'(version\s*=\s*")[^"]*(")',
+                rf'\1{declared_version}\2',
+            )
+
+            # Keep the in-memory modules in sync as well.
+            ai_diffusion.__version__ = declared_version
+            try:
+                import ai_diffusion.resources as resources_module
+
+                resources_module.version = declared_version
+            except Exception:
+                pass
+
+            version = declared_version
+        else:
+            version = declared_version
+
+    release_name = f"krita_ai_diffusion {version}"
+    if title:
+        release_name = f"{title} ({version})"
+
+    release_body = body_text or f"Version {version}"
+    return version, release_name, release_body
 
 
 def update_server_requirements():
@@ -63,6 +148,9 @@ def precheck():
 
 
 def build_package():
+    version, _, _ = get_release_metadata(sync_code_version=True)
+    package_name = f"krita_ai_diffusion-{version}"
+
     precheck()
 
     rmtree(package_dir, ignore_errors=True)
@@ -101,44 +189,9 @@ async def publish_package(package_path: Path, target: str):
         )
 
     owner, name = repo.split("/", 1)
+
+    version, release_name, release_body = get_release_metadata(sync_code_version=True)
     tag_name = f"v{version}"
-
-    # Read release title/version/body from release_notes.md if present
-    release_notes_file = root / "release_notes.md"
-    release_name = f"krita_ai_diffusion {version}"
-    release_body = f"Version {version}"
-
-    if release_notes_file.exists():
-        text = release_notes_file.read_text(encoding="utf-8")
-        lines = [line.rstrip() for line in text.splitlines()]
-
-        title = None
-        declared_version = None
-        body_lines: list[str] = []
-
-        for line in lines:
-            stripped = line.strip()
-            lower = stripped.lower()
-            if lower.startswith("title:"):
-                title = stripped.split(":", 1)[1].strip() or None
-                continue
-            if lower.startswith("version:"):
-                declared_version = stripped.split(":", 1)[1].strip() or None
-                continue
-            body_lines.append(line)
-
-        if declared_version and declared_version != version:
-            raise RuntimeError(
-                f"Version mismatch: ai_diffusion.__version__ is {version} "
-                f"but release_notes.md declares {declared_version}"
-            )
-
-        if title:
-            release_name = f"{title} ({version})"
-
-        body_text = "\n".join(body_lines).strip()
-        if body_text:
-            release_body = body_text
 
     headers = {
         "Authorization": f"Bearer {token}",
@@ -197,10 +250,14 @@ if __name__ == "__main__":
     cmd = sys.argv[1] if len(sys.argv) > 1 else "build"
 
     if cmd == "build":
+        version, _, _ = get_release_metadata(sync_code_version=True)
+        package_name = f"krita_ai_diffusion-{version}"
         print("Building package", root / package_name)
         build_package()
 
     elif cmd == "publish":
+        version, _, _ = get_release_metadata(sync_code_version=True)
+        package_name = f"krita_ai_diffusion-{version}"
         package = root / f"{package_name}.zip"
         print("Publishing package", str(package))
         asyncio.run(publish_package(package, "github"))

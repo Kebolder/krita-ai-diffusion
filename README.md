@@ -1,12 +1,14 @@
-## Experimental lora Manager Tab
+## Krita AI Diffusion – Personal Merge Build
 
-This branch is an experimental **lora Manager** tab that is not part of the main plugin.
+This version of the Krita AI Diffusion plugin is a personal merge of all my branches, experiments, and updates. It may change frequently, and parts of it will probably be opened as pull requests to the original plugin over time.
 
-In this tab you can:
-- Browse all discovered lora (from the ComfyUI server) with folder filtering and search.
-- Edit per-lora trigger words, which are automatically appended when using lora autocomplete in the prompt.
-- Configure a default strength for each lora; autocomplete inserts `<lora:name:strength>` using this value.
+### For original version and info goto https://github.com/Acly/krita-ai-diffusion
 
-Notes:
-- Still working on this will improve and make changes over time.
-- Behavior and data format (`lora_triggers`, `lora_strength` metadata) are designed to remain compatible with the existing style/lora settings UI.>
+### New stuff
+* Custom graph slider have inputs
+
+* Resizing can be done from the Krita output node 
+
+* Lora manager tab - A easy way to manage your ComfyUI's loras being able to add trigger words and strength when using prompt auto complete
+
+* Custom graph saving support for overrides.

@@ -53,6 +53,7 @@ class Workspace(Enum):
     live = 2
     animation = 3
     custom = 4
+    lora_manager = 5
 
 
 class ProgressKind(Enum):

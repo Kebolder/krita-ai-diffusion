@@ -1,6 +1,7 @@
 from enum import Enum
 from dataclasses import dataclass
 import csv
+from pathlib import Path
 from typing import cast
 
 from PyQt5.QtWidgets import QApplication, QCompleter, QPlainTextEdit, QStyledItemDelegate, QStyle
@@ -9,7 +10,7 @@ from PyQt5.QtCore import Qt, QStringListModel, QSize, QRect, QAbstractProxyModel
 
 from ..root import root
 from ..settings import settings
-from ..files import FileFilter
+from ..files import FileFilter, FileSource
 from ..util import ensure, plugin_dir, user_data_dir
 
 
@@ -255,8 +256,30 @@ class PromptAutoComplete:
         triggers = ""
         prefix = self._current_text()
         if prefix.startswith("<lora:"):
-            if file := root.files.loras.find(f"{completion}.safetensors"):
-                triggers = " " + file.meta("lora_triggers", "")
+            file = None
+            input_name = completion.lower()
+            norm_input = Path(input_name).stem
+            for f in root.files.loras:
+                if f.source is FileSource.unavailable:
+                    continue
+                stem = Path(f.id).stem.lower()
+                name = f.name.lower()
+                if (
+                    input_name == stem
+                    or input_name == name
+                    or norm_input == stem
+                    or norm_input == name
+                ):
+                    file = f
+                    break
+            strength = 1.0
+            if file:
+                trigger_text = file.meta("lora_triggers", "")
+                if trigger_text:
+                    triggers = trigger_text
+                strength = file.meta("lora_strength", 1.0)
+            strength_str = f"{strength:g}"
+            completion = f"{completion}:{strength_str}"
         elif prefix.startswith("<layer:"):
             pass
         else:  # tag completion
@@ -267,7 +290,7 @@ class PromptAutoComplete:
         pos = cursor_position(text, initial_cursor)
         start_pos = pos - len(self._completion_prefix)  # pos in python string
         start_cursor_pos = initial_cursor.position() - len(self._completion_prefix)  # pos in utf-16
-        fill = completion + self._completion_suffix + triggers
+        fill = completion + self._completion_suffix + (triggers or "")
         text = text[:start_pos] + fill + text[pos:]
         self._widget.setPlainText(text)
         cursor = self._widget.textCursor()

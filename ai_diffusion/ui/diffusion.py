@@ -18,6 +18,7 @@ from .custom_workflow import CustomWorkflowWidget, CustomWorkflowPlaceholder
 from .upscale import UpscaleWidget
 from .live import LiveWidget
 from .animation import AnimationWidget
+from .lora_manager import LoraManagerWidget
 
 
 class AutoUpdateWidget(QWidget):
@@ -221,6 +222,7 @@ class ImageDiffusionWidget(DockWidget):
         self._live = LiveWidget()
         self._custom = CustomWorkflowWidget()
         self._custom_placeholder = CustomWorkflowPlaceholder()
+        self._lora_manager = LoraManagerWidget()
         self._frame = QStackedWidget(self)
         self._frame.addWidget(self._welcome)
         self._frame.addWidget(self._generation)
@@ -229,6 +231,7 @@ class ImageDiffusionWidget(DockWidget):
         self._frame.addWidget(self._animation)
         self._frame.addWidget(self._custom)
         self._frame.addWidget(self._custom_placeholder)
+        self._frame.addWidget(self._lora_manager)
         self.setWidget(self._frame)
 
         root.connection.state_changed.connect(self.update_content)
@@ -268,3 +271,6 @@ class ImageDiffusionWidget(DockWidget):
         elif model.workspace is Workspace.custom:
             self._custom.model = model
             self._frame.setCurrentWidget(self._custom)
+        elif model.workspace is Workspace.lora_manager:
+            self._lora_manager.model = model
+            self._frame.setCurrentWidget(self._lora_manager)

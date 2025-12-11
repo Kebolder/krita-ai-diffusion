@@ -63,9 +63,7 @@ class LoraManagerItem(QWidget):
         name_label = QLabel(file.name, self)
 
         self._trigger_edit = QLineEdit(self)
-        trigger_help = _(
-            "Optional text which is added to the prompt when the LoRA is used"
-        )
+        trigger_help = _("Optional text which is added to the prompt when the LoRA is used")
         self._trigger_edit.setPlaceholderText(trigger_help)
         self._trigger_edit.setText(self._file.meta("lora_triggers", ""))
         self._trigger_edit.textChanged.connect(self._set_triggers)

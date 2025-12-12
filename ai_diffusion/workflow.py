@@ -1329,7 +1329,10 @@ def expand_custom(
         return value
 
     for node in custom:
-        match node.type:
+        canonical_type = (
+            "ETN_" + node.type[4:] if node.type.startswith("JAX_") else node.type
+        )
+        match canonical_type:
             case "ETN_KritaCanvas":
                 image = ensure(images.initial_image)
                 outputs[node.output(0)] = w.load_image(image)

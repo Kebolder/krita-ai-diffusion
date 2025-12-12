@@ -479,7 +479,9 @@ class Model(QObject, ObservableProperties):
             is_anim = self.custom.mode is CustomGenerationMode.animation
             seed = self.seed if is_live or self.fixed_seed else workflow.generate_seed()
 
-            if next(wf.find(type="ETN_KritaSelection"), None):
+            if next(wf.find(type="ETN_KritaSelection"), None) or next(
+                wf.find(type="JAX_KritaSelection"), None
+            ):
                 mask, _ = self._doc.create_mask_from_selection()
                 if mask:
                     img_input.hires_mask = mask.to_image(bounds.extent)

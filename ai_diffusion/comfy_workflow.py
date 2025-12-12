@@ -121,33 +121,35 @@ class ComfyWorkflow:
         r: dict[str, dict] = {}
         masks = []
         for id, node in self.root.items():
-            if node["class_type"] == "ETN_LoadImageCache":
+            class_type = node["class_type"]
+            prefix = "JAX_" if class_type.startswith("JAX_") else "ETN_" if class_type.startswith("ETN_") else ""
+            if prefix and class_type == f"{prefix}LoadImageCache":
                 image_id = node["inputs"]["id"]
                 image = Image.from_bytes(self.image_data[image_id])
                 is_mask = image.is_mask
                 node = deepcopy(node)
                 if is_mask:
-                    node["class_type"] = "ETN_LoadMaskBase64"
+                    node["class_type"] = f"{prefix}LoadMaskBase64"
                     node["inputs"]["mask"] = image.to_base64()
                     masks.append(id)
                 else:
-                    node["class_type"] = "ETN_LoadImageBase64"
+                    node["class_type"] = f"{prefix}LoadImageBase64"
                     node["inputs"]["image"] = image.to_base64()
-            elif node["class_type"] == "ETN_SaveImageCache":
+            elif prefix and class_type == f"{prefix}SaveImageCache":
                 node = deepcopy(node)
                 node["class_type"] = "PreviewImage"
                 del node["inputs"]["format"]
-            elif node["class_type"] == "ETN_InjectImage":
+            elif prefix and class_type == f"{prefix}InjectImage":
                 image = self.images[node["inputs"]["id"]]
                 node = deepcopy(node)
-                node["class_type"] = "ETN_LoadImageBase64"
+                node["class_type"] = f"{prefix}LoadImageBase64"
                 node["inputs"]["image"] = image.to_base64()
-            elif node["class_type"] == "ETN_InjectMask":
+            elif prefix and class_type == f"{prefix}InjectMask":
                 image = self.images[node["inputs"]["id"]]
                 node = deepcopy(node)
-                node["class_type"] = "ETN_LoadMaskBase64"
+                node["class_type"] = f"{prefix}LoadMaskBase64"
                 node["inputs"]["mask"] = image.to_base64()
-            elif node["class_type"] == "ETN_ReturnImage":
+            elif prefix and class_type == f"{prefix}ReturnImage":
                 node = deepcopy(node)
                 node["class_type"] = "PreviewImage"
             else:
@@ -1364,7 +1366,7 @@ def _convert_ui_workflow(w: dict, node_inputs: ComfyObjectInfo):
                 widget_count += 1
                 if len(values) > widget_count and values[widget_count] in _control_after_generate:
                     widget_count += 1
-                if type == "ETN_Parameter" and widget_count >= len(values):
+                if type in ("ETN_Parameter", "JAX_Parameter") and widget_count >= len(values):
                     break  # min/max widgets are not visible for non-numeric parameters
 
             for connection in node["inputs"]:

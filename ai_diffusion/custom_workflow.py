@@ -300,9 +300,7 @@ def workflow_parameters(w: ComfyWorkflow):
     text_types = ("text", "prompt (positive)", "prompt (negative)")
     for node in w:
         # Support custom parameter nodes with either ETN_ or JAX_ prefix by normalizing.
-        canonical_type = (
-            "ETN_" + node.type[4:] if node.type.startswith("JAX_") else node.type
-        )
+        canonical_type = "ETN_" + node.type[4:] if node.type.startswith("JAX_") else node.type
         param_type = node.input("type", "") if canonical_type == "ETN_Parameter" else ""
         match (canonical_type, param_type):
             case ("ETN_KritaStyle", _):

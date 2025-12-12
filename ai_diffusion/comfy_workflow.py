@@ -122,7 +122,13 @@ class ComfyWorkflow:
         masks = []
         for id, node in self.root.items():
             class_type = node["class_type"]
-            prefix = "JAX_" if class_type.startswith("JAX_") else "ETN_" if class_type.startswith("ETN_") else ""
+            prefix = (
+                "JAX_"
+                if class_type.startswith("JAX_")
+                else "ETN_"
+                if class_type.startswith("ETN_")
+                else ""
+            )
             if prefix and class_type == f"{prefix}LoadImageCache":
                 image_id = node["inputs"]["id"]
                 image = Image.from_bytes(self.image_data[image_id])

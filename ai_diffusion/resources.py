@@ -8,7 +8,7 @@ from typing import Any, NamedTuple, Sequence
 
 # Version identifier for all the resources defined here. This is used as the server version.
 # It usually follows the plugin version, but not all new plugin versions also require a server update.
-version = "1.43.0-1.0.3"
+version = "1.43.0-1.0.5"
 
 comfy_url = "https://github.com/comfyanonymous/ComfyUI"
 comfy_version = "f8b981ae9a5676311624bbafa636a1874db79459"

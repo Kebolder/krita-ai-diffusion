@@ -236,6 +236,17 @@ class ComfyWorkflow:
         return self.add(node.type, 1, **node.inputs)
 
     def find(self, type: str):
+        # Allow matching either ETN_ or JAX_ prefixed custom nodes transparently.
+        if type.startswith("ETN_"):
+            alt = "JAX_" + type[4:]
+            return (
+                self.node(int(k)) for k, v in self.root.items() if v["class_type"] in (type, alt)
+            )
+        if type.startswith("JAX_"):
+            alt = "ETN_" + type[4:]
+            return (
+                self.node(int(k)) for k, v in self.root.items() if v["class_type"] in (type, alt)
+            )
         return (self.node(int(k)) for k, v in self.root.items() if v["class_type"] == type)
 
     def find_connected(self, output: Output):

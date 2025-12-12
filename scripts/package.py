@@ -18,6 +18,11 @@ import translation
 
 root = Path(__file__).parent.parent
 package_dir = root / "scripts" / ".package"
+bin_dir = root / "bin"
+
+
+def ensure_bin_dir():
+    bin_dir.mkdir(exist_ok=True)
 
 
 def convert_markdown_to_html(markdown_file: Path, html_file: Path):
@@ -168,12 +173,21 @@ def build_package():
     copy(root / "LICENSE", plugin_dst)
     convert_markdown_to_html(root / "README.md", plugin_dst / "manual.html")
 
-    make_archive(str(root / package_name), "zip", package_dir)
+    ensure_bin_dir()
+    archive_base = bin_dir / package_name
+    archive_path = Path(make_archive(str(archive_base), "zip", package_dir))
+
+    # Clean up any older zip placed at repo root by previous versions.
+    old_root_zip = root / archive_path.name
+    if old_root_zip.exists():
+        old_root_zip.unlink()
 
     # Do this afterwards to not include untested changes in the package
     # Option 1: test the dependency changes and do another package build
     # Option 2: revert the dependency changes, keep stable version for now
     update_server_requirements()
+
+    return archive_path
 
 
 async def publish_package(package_path: Path, target: str):
@@ -246,22 +260,30 @@ async def publish_package(package_path: Path, target: str):
                 print("Uploaded asset:", asset.get("browser_download_url"))
 
 
-if __name__ == "__main__":
-    cmd = sys.argv[1] if len(sys.argv) > 1 else "build"
+def main(argv: list[str] | None = None):
+    args = argv if argv is not None else sys.argv[1:]
+    cmd = args[0] if len(args) > 0 else "build"
 
     if cmd == "build":
         version, _, _ = get_release_metadata(sync_code_version=True)
         package_name = f"krita_ai_diffusion-{version}"
-        print("Building package", root / package_name)
+        print("Building package", bin_dir / f"{package_name}.zip")
         build_package()
+        return
 
-    elif cmd == "publish":
-        version, _, _ = get_release_metadata(sync_code_version=True)
-        package_name = f"krita_ai_diffusion-{version}"
-        package = root / f"{package_name}.zip"
+    if cmd == "publish":
+        package = build_package()
         print("Publishing package", str(package))
         asyncio.run(publish_package(package, "github"))
+        return
 
-    elif cmd == "check":
+    if cmd == "check":
         print("Performing precheck without building")
         precheck()
+        return
+
+    raise SystemExit(f"Unknown command: {cmd}")
+
+
+if __name__ == "__main__":
+    main()

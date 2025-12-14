@@ -46,6 +46,10 @@ def test_inputs_required_and_merged(info: ComfyObjectInfo):
     merged_canvas = info.inputs("ETN_KritaCanvas")
     assert isinstance(merged_canvas, dict) and merged_canvas == {}
 
+    # ETN_/JAX_ prefixed custom nodes are treated as aliases
+    assert info.inputs("JAX_KritaCanvas", "required") is None
+    assert info.inputs("JAX_KritaCanvas") == {}
+
 
 def test_params_defaults_for_various_types(info: ComfyObjectInfo):
     # GrowMask: INT and BOOLEAN provide defaults
@@ -55,6 +59,9 @@ def test_params_defaults_for_various_types(info: ComfyObjectInfo):
     # ETN_KritaOutput: legacy combo (list of values + default dict), picks default
     params_krita_out = info.params("ETN_KritaOutput", "required")
     assert params_krita_out == {"format": "PNG", "images": None}
+
+    # Alias lookup resolves to the same defaults
+    assert info.params("JAX_KritaOutput", "required") == params_krita_out
 
     # UpscaleModelLoader: COMBO v3 picks first from options
     params_upscale = info.params("UpscaleModelLoader", "required")
@@ -74,6 +81,7 @@ def test_options_for_combo_types(info: ComfyObjectInfo):
     # Legacy list combo
     opts_format = info.options("ETN_KritaOutput", "format")
     assert opts_format == ["PNG", "JPEG"]
+    assert info.options("JAX_KritaOutput", "format") == opts_format
 
     # Non-existent node/param -> empty list
     assert info.options("DoesNotExist", "foo") == []

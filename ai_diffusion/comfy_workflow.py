@@ -11,6 +11,28 @@ from .image import Bounds, Extent, Image, ImageCollection
 from .resources import Arch, ControlMode
 from .util import base_type_match, client_logger as log
 
+_CUSTOM_NODE_PREFIXES = ("ETN_", "JAX_")
+
+
+def _split_custom_node_prefix(node_type: str) -> tuple[str, str]:
+    for prefix in _CUSTOM_NODE_PREFIXES:
+        if node_type.startswith(prefix):
+            return prefix, node_type[len(prefix) :]
+    return "", node_type
+
+
+def _custom_node_type_aliases(node_type: str) -> tuple[str, ...]:
+    prefix, base = _split_custom_node_prefix(node_type)
+    if not prefix:
+        return (node_type,)
+    other = _CUSTOM_NODE_PREFIXES[1] if prefix == _CUSTOM_NODE_PREFIXES[0] else _CUSTOM_NODE_PREFIXES[0]
+    return (prefix + base, other + base)
+
+
+def _canonical_custom_node_type(node_type: str, canonical_prefix: str = "ETN_") -> str:
+    prefix, base = _split_custom_node_prefix(node_type)
+    return canonical_prefix + base if prefix else node_type
+
 
 class ComfyRunMode(Enum):
     runtime = 0  # runs as part of same process, transfer images in memory
@@ -122,14 +144,8 @@ class ComfyWorkflow:
         masks = []
         for id, node in self.root.items():
             class_type = node["class_type"]
-            prefix = (
-                "JAX_"
-                if class_type.startswith("JAX_")
-                else "ETN_"
-                if class_type.startswith("ETN_")
-                else ""
-            )
-            if prefix and class_type == f"{prefix}LoadImageCache":
+            prefix, base_type = _split_custom_node_prefix(class_type)
+            if prefix and base_type == "LoadImageCache":
                 image_id = node["inputs"]["id"]
                 image = Image.from_bytes(self.image_data[image_id])
                 is_mask = image.is_mask
@@ -141,21 +157,21 @@ class ComfyWorkflow:
                 else:
                     node["class_type"] = f"{prefix}LoadImageBase64"
                     node["inputs"]["image"] = image.to_base64()
-            elif prefix and class_type == f"{prefix}SaveImageCache":
+            elif prefix and base_type == "SaveImageCache":
                 node = deepcopy(node)
                 node["class_type"] = "PreviewImage"
                 del node["inputs"]["format"]
-            elif prefix and class_type == f"{prefix}InjectImage":
+            elif prefix and base_type == "InjectImage":
                 image = self.images[node["inputs"]["id"]]
                 node = deepcopy(node)
                 node["class_type"] = f"{prefix}LoadImageBase64"
                 node["inputs"]["image"] = image.to_base64()
-            elif prefix and class_type == f"{prefix}InjectMask":
+            elif prefix and base_type == "InjectMask":
                 image = self.images[node["inputs"]["id"]]
                 node = deepcopy(node)
                 node["class_type"] = f"{prefix}LoadMaskBase64"
                 node["inputs"]["mask"] = image.to_base64()
-            elif prefix and class_type == f"{prefix}ReturnImage":
+            elif prefix and base_type == "ReturnImage":
                 node = deepcopy(node)
                 node["class_type"] = "PreviewImage"
             else:
@@ -236,18 +252,8 @@ class ComfyWorkflow:
         return self.add(node.type, 1, **node.inputs)
 
     def find(self, type: str):
-        # Allow matching either ETN_ or JAX_ prefixed custom nodes transparently.
-        if type.startswith("ETN_"):
-            alt = "JAX_" + type[4:]
-            return (
-                self.node(int(k)) for k, v in self.root.items() if v["class_type"] in (type, alt)
-            )
-        if type.startswith("JAX_"):
-            alt = "ETN_" + type[4:]
-            return (
-                self.node(int(k)) for k, v in self.root.items() if v["class_type"] in (type, alt)
-            )
-        return (self.node(int(k)) for k, v in self.root.items() if v["class_type"] == type)
+        aliases = _custom_node_type_aliases(type)
+        return (self.node(int(k)) for k, v in self.root.items() if v["class_type"] in aliases)
 
     def find_connected(self, output: Output):
         for node in self:
@@ -1288,8 +1294,14 @@ class ComfyObjectInfo:
     def __init__(self, nodes: dict[str, dict]):
         self.nodes = nodes
 
+    def _resolve_node_class(self, node_class: str) -> str | None:
+        for candidate in _custom_node_type_aliases(node_class):
+            if candidate in self.nodes:
+                return candidate
+        return None
+
     def __contains__(self, node_class: str):
-        return node_class in self.nodes
+        return self._resolve_node_class(node_class) is not None
 
     def __bool__(self):
         return bool(self.nodes)
@@ -1332,9 +1344,10 @@ class ComfyObjectInfo:
         return []
 
     def inputs(self, node_name: str, category="") -> dict[str, list] | None:
-        node = self.nodes.get(node_name)
-        if node is None:
+        resolved = self._resolve_node_class(node_name)
+        if resolved is None:
             return None
+        node = self.nodes[resolved]
         inputs = node.get("input", {})
         if category:
             return inputs.get(category)
@@ -1383,7 +1396,7 @@ def _convert_ui_workflow(w: dict, node_inputs: ComfyObjectInfo):
                 widget_count += 1
                 if len(values) > widget_count and values[widget_count] in _control_after_generate:
                     widget_count += 1
-                if type in ("ETN_Parameter", "JAX_Parameter") and widget_count >= len(values):
+                if _canonical_custom_node_type(type) == "ETN_Parameter" and widget_count >= len(values):
                     break  # min/max widgets are not visible for non-numeric parameters
 
             for connection in node["inputs"]:

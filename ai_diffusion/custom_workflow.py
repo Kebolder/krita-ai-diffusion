@@ -259,6 +259,7 @@ class CustomParam(NamedTuple):
     min: int | float | None = None
     max: int | float | None = None
     choices: list[str] | None = None
+    mainslider: bool = False
 
     @property
     def display_name(self):
@@ -302,6 +303,7 @@ def workflow_parameters(w: ComfyWorkflow):
         # Support custom parameter nodes with either ETN_ or JAX_ prefix by normalizing.
         canonical_type = "ETN_" + node.type[4:] if node.type.startswith("JAX_") else node.type
         param_type = node.input("type", "") if canonical_type == "ETN_Parameter" else ""
+        mainslider = node.input("mainslider", False) if canonical_type == "ETN_Parameter" else False
         match (canonical_type, param_type):
             case ("ETN_KritaStyle", _):
                 name = node.input("name", "Style")
@@ -317,13 +319,27 @@ def workflow_parameters(w: ComfyWorkflow):
                 default = node.input("default", 0)
                 min = node.input("min", -(2**31))
                 max = node.input("max", 2**31)
-                yield CustomParam(ParamKind.number_int, name, default=default, min=min, max=max)
+                yield CustomParam(
+                    ParamKind.number_int,
+                    name,
+                    default=default,
+                    min=min,
+                    max=max,
+                    mainslider=mainslider,
+                )
             case ("ETN_Parameter", "number"):
                 name = node.input("name", "Parameter")
                 default = node.input("default", 0.0)
                 min = node.input("min", 0.0)
                 max = node.input("max", 1.0)
-                yield CustomParam(ParamKind.number_float, name, default=default, min=min, max=max)
+                yield CustomParam(
+                    ParamKind.number_float,
+                    name,
+                    default=default,
+                    min=min,
+                    max=max,
+                    mainslider=mainslider,
+                )
             case ("ETN_Parameter", "toggle"):
                 name = node.input("name", "Parameter")
                 default = node.input("default", False)

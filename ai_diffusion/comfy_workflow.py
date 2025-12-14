@@ -25,7 +25,9 @@ def _custom_node_type_aliases(node_type: str) -> tuple[str, ...]:
     prefix, base = _split_custom_node_prefix(node_type)
     if not prefix:
         return (node_type,)
-    other = _CUSTOM_NODE_PREFIXES[1] if prefix == _CUSTOM_NODE_PREFIXES[0] else _CUSTOM_NODE_PREFIXES[0]
+    other = (
+        _CUSTOM_NODE_PREFIXES[1] if prefix == _CUSTOM_NODE_PREFIXES[0] else _CUSTOM_NODE_PREFIXES[0]
+    )
     return (prefix + base, other + base)
 
 
@@ -1396,7 +1398,9 @@ def _convert_ui_workflow(w: dict, node_inputs: ComfyObjectInfo):
                 widget_count += 1
                 if len(values) > widget_count and values[widget_count] in _control_after_generate:
                     widget_count += 1
-                if _canonical_custom_node_type(type) == "ETN_Parameter" and widget_count >= len(values):
+                if _canonical_custom_node_type(type) == "ETN_Parameter" and widget_count >= len(
+                    values
+                ):
                     break  # min/max widgets are not visible for non-numeric parameters
 
             for connection in node["inputs"]:

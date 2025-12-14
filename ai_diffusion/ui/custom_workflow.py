@@ -702,6 +702,17 @@ class CustomWorkflowWidget(QWidget):
 
         self._bottom = QWidget(self)
 
+        self._main_slider_container = QWidget(self._bottom)
+        self._main_slider_container.setVisible(False)
+        self._main_slider_param_name: str | None = None
+        self._main_slider_param_widget: IntParamWidget | FloatParamWidget | None = None
+        self._main_slider_label = QLabel(self._main_slider_container)
+        self._main_slider_label.setVisible(False)
+        self._main_slider_layout = QHBoxLayout(self._main_slider_container)
+        self._main_slider_layout.setContentsMargins(0, 0, 0, 0)
+        self._main_slider_layout.setSpacing(4)
+        self._main_slider_layout.addWidget(self._main_slider_label)
+
         self._generate_button = GenerateButton(JobKind.diffusion, self._bottom)
         self._generate_button.clicked.connect(self._generate)
 
@@ -780,6 +791,7 @@ class CustomWorkflowWidget(QWidget):
         actions_layout.addSpacing(4)
         actions_layout.addWidget(self._queue_button)
         self._bottom_layout = QVBoxLayout(self._bottom)
+        self._bottom_layout.addWidget(self._main_slider_container)
         self._bottom_layout.addLayout(actions_layout)
         self._bottom_layout.addWidget(self._progress_bar)
         self._bottom_layout.addWidget(self._error_box)
@@ -884,10 +896,15 @@ class CustomWorkflowWidget(QWidget):
             self._params_scroll.setWidget(None)
             self._params_widget.deleteLater()
             self._params_widget = None
-        if len(self.model.custom.metadata) > 0:
-            self._params_widget = WorkflowParamsWidget(self.model.custom.metadata, self)
+        self._update_main_slider()
+
+        visible_params = [p for p in self.model.custom.metadata if not p.mainslider]
+        if len(visible_params) > 0:
+            self._params_widget = WorkflowParamsWidget(visible_params, self)
             self._params_widget.value = self.model.custom.params  # set default values from model
-            self.model.custom.params = self._params_widget.value  # set default values from widgets
+            merged = dict(self.model.custom.params)
+            merged.update(self._params_widget.value)  # set default values from widgets
+            self.model.custom.params = merged
             self._params_widget.value_changed.connect(self._change_params)
             self._params_widget.activated.connect(self._generate)
 
@@ -902,7 +919,64 @@ class CustomWorkflowWidget(QWidget):
 
     def _change_params(self):
         if self._params_widget:
-            self.model.custom.params = self._params_widget.value
+            merged = dict(self.model.custom.params)
+            merged.update(self._params_widget.value)
+            self.model.custom.params = merged
+
+    def _update_main_slider(self):
+        if self._main_slider_param_widget:
+            self._main_slider_layout.removeWidget(self._main_slider_param_widget)
+            self._main_slider_param_widget.deleteLater()
+            self._main_slider_param_widget = None
+        self._main_slider_param_name = None
+        self._main_slider_container.setVisible(False)
+
+        params = [p for p in self.model.custom.metadata if p.mainslider]
+        if not params:
+            return
+
+        param = params[0]
+        if len(params) > 1:
+            log.warning(f"Workflow has multiple mainslider parameters; using '{param.name}'")
+
+        if param.kind is ParamKind.number_int:
+            widget: IntParamWidget | FloatParamWidget = IntParamWidget(
+                param, self._main_slider_container
+            )
+        elif param.kind is ParamKind.number_float:
+            widget = FloatParamWidget(param, self._main_slider_container)
+        else:
+            log.warning(f"mainslider is only supported for numeric parameters (got {param.kind})")
+            return
+
+        widget.value_changed.connect(self._change_main_slider)
+        self._main_slider_layout.addWidget(widget, stretch=1)
+        self._main_slider_param_widget = widget
+        self._main_slider_param_name = param.name
+
+        # Keep height similar to the action row
+        self._main_slider_container.setFixedHeight(self._generate_button.height())
+
+        # Optional label only when grouped name is non-empty
+        label = param.display_name
+        self._main_slider_label.setText(label)
+        self._main_slider_label.setVisible(bool(label))
+
+        # Initialize from model params
+        if self._main_slider_param_name in self.model.custom.params:
+            try:
+                widget.value = self.model.custom.params[self._main_slider_param_name]
+            except Exception:
+                pass
+
+        self._main_slider_container.setVisible(True)
+
+    def _change_main_slider(self):
+        if not (self._main_slider_param_name and self._main_slider_param_widget):
+            return
+        merged = dict(self.model.custom.params)
+        merged[self._main_slider_param_name] = self._main_slider_param_widget.value
+        self.model.custom.params = merged
 
     def _set_params_height(self, height: int):
         self._splitter.setSizes([height, self._splitter.height() - height])

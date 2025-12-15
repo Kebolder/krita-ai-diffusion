@@ -185,8 +185,6 @@ def build_package():
     # Do this afterwards to not include untested changes in the package
     # Option 1: test the dependency changes and do another package build
     # Option 2: revert the dependency changes, keep stable version for now
-    update_server_requirements()
-
     return archive_path
 
 
@@ -280,6 +278,11 @@ def main(argv: list[str] | None = None):
     if cmd == "check":
         print("Performing precheck without building")
         precheck()
+        return
+
+    if cmd == "update":
+        print("Updating ai_diffusion/server_requirements.txt")
+        update_server_requirements()
         return
 
     raise SystemExit(f"Unknown command: {cmd}")

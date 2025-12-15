@@ -1382,10 +1382,12 @@ def _convert_ui_workflow(w: dict, node_inputs: ComfyObjectInfo):
             continue
 
         inputs = {}
-        fields = node_inputs.inputs(type)
+        installed_type = next((t for t in _custom_node_type_aliases(type) if node_inputs.inputs(t)), None)
+        fields = node_inputs.inputs(installed_type) if installed_type else None
         if fields is None:
+            aliases = ", ".join(_custom_node_type_aliases(type))
             raise ValueError(
-                f"Workflow uses node type {type}, but it is not installed on the ComfyUI server."
+                f"Workflow uses node type {type}, but it is not installed on the ComfyUI server (tried: {aliases})."
             )
         widget_count = 0
         for field_name, field in fields.items():
@@ -1412,7 +1414,7 @@ def _convert_ui_workflow(w: dict, node_inputs: ComfyObjectInfo):
                     else:
                         inputs[field_name] = [link[1], link[2]]
                     break
-        r[id] = {"class_type": type, "inputs": inputs}
+        r[id] = {"class_type": installed_type or type, "inputs": inputs}
 
     return r
 

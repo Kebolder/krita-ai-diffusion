@@ -437,7 +437,7 @@ class ComfyClient(Client):
                         self._clear_job(job.id)
                         await self._report(ClientEvent.error, job.id, error=error)
 
-                if msg["type"] == "etn_workflow_published":
+                if msg["type"] in ("etn_workflow_published", "JAX_workflow_published"):
                     name = f"{msg['data']['publisher']['name']} ({msg['data']['publisher']['id']})"
                     workflow = SharedWorkflow(name, msg["data"]["workflow"])
                     await self._report(ClientEvent.published, "", result=workflow)
@@ -893,7 +893,8 @@ def _extract_message_png_image(data: memoryview):
     if len(data) > s:
         event, format = struct.unpack_from(">II", data)
         # ComfyUI server.py: BinaryEventTypes.PREVIEW_IMAGE=1
-        if event == 1 and format == 2:  # format: JPEG=1, PNG=2
+        # ComfyUI server.py: BinaryEventTypes.UNENCODED_PREVIEW_IMAGE=2 (value may vary by version/fork)
+        if event in (1, 2) and format == 2:  # format: JPEG=1, PNG=2
             return Image.from_bytes(data[s:])
     return None
 
@@ -953,7 +954,9 @@ def _extract_resize_output(job_id: str, msg: dict):
 
         resize = output.get("resize_canvas")
         if isinstance(resize, list):
-            active = any(bool(item) for item in resize)
+            active = any(
+                bool(item.get("enabled")) if isinstance(item, dict) else bool(item) for item in resize
+            )
         else:
             active = bool(resize)
 

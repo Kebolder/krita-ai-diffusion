@@ -955,7 +955,8 @@ def _extract_resize_output(job_id: str, msg: dict):
         resize = output.get("resize_canvas")
         if isinstance(resize, list):
             active = any(
-                bool(item.get("enabled")) if isinstance(item, dict) else bool(item) for item in resize
+                bool(item.get("enabled")) if isinstance(item, dict) else bool(item)
+                for item in resize
             )
         else:
             active = bool(resize)

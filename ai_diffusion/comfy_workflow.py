@@ -1382,7 +1382,9 @@ def _convert_ui_workflow(w: dict, node_inputs: ComfyObjectInfo):
             continue
 
         inputs = {}
-        installed_type = next((t for t in _custom_node_type_aliases(type) if node_inputs.inputs(t)), None)
+        installed_type = next(
+            (t for t in _custom_node_type_aliases(type) if node_inputs.inputs(t)), None
+        )
         fields = node_inputs.inputs(installed_type) if installed_type else None
         if fields is None:
             aliases = ", ".join(_custom_node_type_aliases(type))

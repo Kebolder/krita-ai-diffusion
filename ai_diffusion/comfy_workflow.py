@@ -611,6 +611,16 @@ class ComfyWorkflow:
             return self.add("EmptySD3LatentImage", 1, width=w, height=h, batch_size=batch_size)
         return self.add("EmptyLatentImage", 1, width=w, height=h, batch_size=batch_size)
 
+    def empty_latent_layers(self, extent: Extent, layer_count: int, batch_size=1):
+        w, h = extent.width, extent.height
+        l = 1 + layer_count * 4  # number of layers for Qwen-Image-Layered
+        return self.add(
+            "EmptyHunyuanLatentVideo", 1, width=w, height=h, length=l, batch_size=batch_size
+        )
+
+    def cut_latent_to_batch(self, latent: Output, dim: str = "t", slice: int = 1):
+        return self.add("LatentCutToBatch", 1, samples=latent, dim=dim, slice_size=slice)
+
     def clip_set_last_layer(self, clip: Output, clip_layer: int):
         return self.add("CLIPSetLastLayer", 1, clip=clip, stop_at_clip_layer=clip_layer)
 
@@ -797,16 +807,24 @@ class ComfyWorkflow:
             clip_vision_output=embeddings,
         )
 
-    def apply_diffsynth_controlnet(
-        self, model: Output, patch: Output, vae: Output, image: Output, strength: float
+    def apply_zimage_fun_controlnet(
+        self,
+        model: Output,
+        patch: Output,
+        vae: Output,
+        strength: float,
+        image: Output,
+        mask: Output | None = None,
     ):
         return self.add(
-            "QwenImageDiffsynthControlnet",
+            "ZImageFunControlnet",
             1,
             model=model,
             model_patch=patch,
             vae=vae,
-            image=image,
+            image=image if not mask else None,
+            inpaint_image=image if mask else None,
+            mask=mask,
             strength=strength,
         )
 

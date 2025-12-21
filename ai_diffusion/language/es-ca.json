@@ -573,5 +573,9 @@
     "Search LoRA": null,
     "A workflow named '{name}' already exists. Do you want to overwrite it?": null,
     "Overwrite Workflow": null
+    "Jobs": null,
+    "Overwrite Workflow": null,
+    "A workflow named '{name}' already exists. Do you want to overwrite it?": null,
+    "Layers": null
   }
 }

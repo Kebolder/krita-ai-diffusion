@@ -569,6 +569,10 @@
     "Not supported for edit models": null,
     "Document:": null,
     "Jobs": null,
+    "Overwrite Workflow": null,
+    "A workflow named '{name}' already exists. Do you want to overwrite it?": null,
+    "Layers": null
+    "Jobs": null,
     "Lora Manager": null,
     "Search LoRA": null,
     "A workflow named '{name}' already exists. Do you want to overwrite it?": null,

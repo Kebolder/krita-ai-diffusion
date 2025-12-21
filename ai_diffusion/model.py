@@ -115,6 +115,7 @@ class Model(QObject, ObservableProperties):
     resolution_multiplier = Property(1.0, persist=True)
     queue_mode = Property(QueueMode.back, persist=True)
     translation_enabled = Property(True, persist=True)
+    layer_count = Property(4, persist=True)
     progress_kind = Property(ProgressKind.generation)
     progress = Property(0.0)
     error = Property(no_error)
@@ -130,6 +131,7 @@ class Model(QObject, ObservableProperties):
     resolution_multiplier_changed = pyqtSignal(float)
     queue_mode_changed = pyqtSignal(QueueMode)
     translation_enabled_changed = pyqtSignal(bool)
+    layer_count_changed = pyqtSignal(int)
     progress_kind_changed = pyqtSignal(ProgressKind)
     progress_changed = pyqtSignal(float)
     error_changed = pyqtSignal(Error)
@@ -197,9 +199,13 @@ class Model(QObject, ObservableProperties):
         eventloop.run(_report_errors(self, jobs))
 
     def _prepare_workflow(self, dryrun=False):
-        is_edit = self.arch.is_edit
+        arch = self.arch
+        is_edit = arch.is_edit
         workflow_kind = WorkflowKind.generate
-        if self.strength < 1.0 or is_edit:
+        strength = self.strength
+        if arch is Arch.qwen_l:
+            strength = 1.0
+        if strength < 1.0 or is_edit:
             workflow_kind = WorkflowKind.refine
         client = self._connection.client
         image = None
@@ -209,7 +215,7 @@ class Model(QObject, ObservableProperties):
         regions = self.active_regions
         region_layer = None
 
-        selection_mod = get_selection_modifiers(self.inpaint.mode, self.strength)
+        selection_mod = get_selection_modifiers(self.inpaint.mode, strength)
         mask, selection_bounds = self._doc.create_mask_from_selection(
             selection_mod.padding, invert=selection_mod.invert, min_size=256
         )
@@ -234,7 +240,7 @@ class Model(QObject, ObservableProperties):
         original_conditioning = conditioning
         seed = self.seed if self.fixed_seed else workflow.generate_seed()
         conditioning, loras, layers, region_layers, prompt_meta = workflow.prepare_prompts(
-            conditioning, self.style, seed, self.arch, FileLibrary.instance()
+            conditioning, self.style, seed, arch, FileLibrary.instance()
         )
         self._add_reference_layers(conditioning, layers, region_layers)
 
@@ -254,7 +260,7 @@ class Model(QObject, ObservableProperties):
             else:
                 pos, ctrl = conditioning.positive, conditioning.control
                 inpaint = workflow.detect_inpaint(
-                    inpaint_mode, mask.bounds, self.arch, pos, ctrl, self.strength
+                    inpaint_mode, mask.bounds, arch, pos, ctrl, strength
                 )
             inpaint.grow, inpaint.feather = selection_mod.apply(selection_bounds)
 
@@ -268,18 +274,20 @@ class Model(QObject, ObservableProperties):
             FileLibrary.instance(),
             self._performance_settings(client),
             mask=mask,
-            strength=self.strength,
+            strength=strength,
             loras=loras,
             inpaint=inpaint,
+            layer_count=self.layer_count,
         )
         loras = input.models.loras if input.models else []
         job_name = prompt_meta.get("prompt_eval", prompt_meta["prompt"])
         job_params = JobParams(bounds, job_name, regions=job_regions)
         job_params.set_style(self.active_style, ensure(input.models).checkpoint)
         job_params.set_control(regions.control)
+        job_params.is_layered = arch is Arch.qwen_l
         job_params.metadata.update(prompt_meta)
         job_params.metadata["loras"] = [dict(name=l.name, weight=l.strength) for l in loras]
-        job_params.metadata["strength"] = self.strength
+        job_params.metadata["strength"] = strength
         return input, job_params, original_conditioning
 
     async def enqueue_jobs(
@@ -785,6 +793,9 @@ class Model(QObject, ObservableProperties):
 
         if job.kind is JobKind.animation and len(job.results) > 1:
             self.apply_animation(job)
+        elif job.params.is_layered and len(job.results) > 1:
+            for i, image in enumerate(job.results):
+                self.apply_result(image, job.params, prefix=f"[Layer {i + 1}] ")
         else:
             self.apply_result(
                 job.results[index],
